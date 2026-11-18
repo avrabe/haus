@@ -8,7 +8,7 @@ under systemd, for example on a Raspberry Pi 4.
 
 > **Status: v0.4.0 in progress.** This repository was `loriot-server` up to
 > 0.3.0. Milestone
-> [v0.4.0](https://github.com/avrabe/loriot-websocket-mcp/milestone/1); scope
+> [v0.4.0](https://github.com/avrabe/haus/milestone/1); scope
 > and readiness in rivet: `rivet release status v0.4.0`.
 
 ## What is in the workspace
@@ -204,11 +204,15 @@ Tags `v*` build these assets (`<ver>` without the `v`):
 Releases up to 0.3.0 are named `loriot-server-<ver>-*` and also carry
 `loriot-web-<ver>-assets.tar.gz`, the Leptos dashboard.
 
+The repository was named `avrabe/loriot-websocket-mcp` until 2026-11-18.
+Releases up to 0.5.0-rc.9 are signed under that name: verify them with
+`loriot-websocket-mcp` in place of `haus` in the identity below.
+
 Verify the signature over the checksums, then the files against the checksums:
 
 ```sh
 cosign verify-blob \
-  --certificate-identity-regexp '^https://github.com/avrabe/loriot-websocket-mcp/\.github/workflows/' \
+  --certificate-identity-regexp '^https://github.com/avrabe/haus/\.github/workflows/' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   --bundle SHA256SUMS.txt.cosign.bundle \
   SHA256SUMS.txt
@@ -218,7 +222,7 @@ sha256sum --ignore-missing -c SHA256SUMS.txt
 Each binary also carries a GitHub build-provenance attestation:
 
 ```sh
-gh attestation verify haus-<ver>-linux-arm64 --repo avrabe/loriot-websocket-mcp
+gh attestation verify haus-<ver>-linux-arm64 --repo avrabe/haus
 ```
 
 ## Development
