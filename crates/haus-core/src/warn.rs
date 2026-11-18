@@ -283,7 +283,9 @@ pub fn climate(series: &[&SeriesData], now_ms: i64, cfg: &WarnConfig) -> Climate
         .filter(|s| stuck_since(s, now_ms, d.stuck_hours).is_none())
         .filter(|s| match (s.meta.key.source, s.latest) {
             (_, None) => false,
-            (Source::Loriot, Some((t, _))) => (now_ms - t) as f64 <= d.silent_minutes * 60_000.0,
+            (Source::Loriot | Source::Wmbus, Some((t, _))) => {
+                (now_ms - t) as f64 <= d.silent_minutes * 60_000.0
+            }
             (Source::Loxone, Some(_)) => true,
         })
         .collect();
@@ -405,7 +407,10 @@ pub fn evaluate(
         // device (EUI) whose newest value of any series is too old, listing
         // all of its series.
         let mut devices: BTreeMap<&str, Vec<&SeriesData>> = BTreeMap::new();
-        for s in all.iter().filter(|s| s.meta.key.source == Source::Loriot) {
+        for s in all
+            .iter()
+            .filter(|s| matches!(s.meta.key.source, Source::Loriot | Source::Wmbus))
+        {
             devices
                 .entry(s.meta.key.source_id.as_str())
                 .or_default()

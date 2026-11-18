@@ -452,17 +452,20 @@ artifacts:
   - id: REQ-WMBUS-001
     type: requirement
     title: Wireless M-Bus meters as a source
-    status: draft
+    status: implemented
+    release: v0.6.0
     description: >
-      haus reads wireless M-Bus meters through wmbusmeters' JSON output
-      (stdout or MQTT): heat meters (energy in kWh, current and previous
-      billing period) and heat cost allocators (consumption units, room and
-      radiator temperature where the meter sends them). Series are keyed by
-      manufacturer and meter id. Meter ids and AES keys come only from the
-      deployment's configuration. A telegram that cannot be decoded (no
-      driver, or encrypted without a key) is counted and reported per meter
-      on the health page, never dropped silently.
-    release: backlog
+      haus reads the owner's wireless M-Bus heating cost allocators from the
+      JSON lines wmbusmeters writes (HAUS_WMBUS_LOG): allocator units, the
+      room temperature the allocator estimates and the radiator temperature,
+      each as a series keyed by source, meter id and field, in the room the
+      private meter list (HAUS_WMBUS_METERS) gives it. A receiver hears the
+      whole building: every telegram of a meter not on that list is dropped
+      unread and its id is never stored or logged. Heat meters and water
+      meters send encrypted telegrams; reading them needs their AES keys from
+      the meter operator and is not part of this requirement yet. The source
+      shows on /health; a meter silent for longer than the silence limit is a
+      "check" note like a silent LoRaWAN sensor.
     fields:
       priority: could
       category: functional

@@ -33,6 +33,7 @@ pub mod store;
 pub mod thermal;
 pub mod warn;
 pub mod weather;
+pub mod wmbus;
 
 // Re-export commonly used types
 pub use analytics::{

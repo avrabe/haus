@@ -1066,6 +1066,7 @@ pub(crate) mod tests {
         st.sources = Arc::new(Sources {
             loriot: UpstreamHealth::default(),
             loxone: Some(UpstreamHealth::default()),
+            wmbus: None,
         });
         let store = st.ingest.store();
         for (id, field, q) in [
