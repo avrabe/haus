@@ -57,6 +57,8 @@ impl UpstreamHealth {
 pub struct Sources {
     pub loriot: UpstreamHealth,
     pub loxone: Option<UpstreamHealth>,
+    /// The wmbusmeters log (REQ-WMBUS-001): connected while it is readable.
+    pub wmbus: Option<UpstreamHealth>,
 }
 
 /// Series keys (source id, field) a source follows live.

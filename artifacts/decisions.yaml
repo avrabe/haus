@@ -246,8 +246,8 @@ artifacts:
   - id: DD-010
     type: design-decision
     title: wmbusmeters decodes the radio, haus consumes its JSON
-    status: draft
-    release: backlog
+    status: implemented
+    release: v0.6.0
     fields:
       decision: >
         A wM-Bus USB receiver (an IMST iU891A/iU893A-class stick, C1+T1)
@@ -257,7 +257,7 @@ artifacts:
         wmbusmeters carries maintained drivers for the meters in question
         (vario451 for Techem Vario 4 heat meters, fhkvdataiii/iv for Techem
         heat cost allocators) and the receiver support. Keeping it a separate
-        process keeps its GPL-3.0 code out of haus's MIT binary and lets the
+        process keeps its GPL-3.0 code out of haus's Apache-2.0 binary and lets the
         receiver sit on another host than haus if radio range needs it.
       alternatives: >
         Decode wM-Bus in Rust inside haus (re-implements every driver);
@@ -735,3 +735,38 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-UI-006
+
+  - id: DD-025
+    type: design-decision
+    title: Only the owner's meters, by a private list, from the logger's file
+    status: implemented
+    release: v0.6.0
+    description: >
+      haus follows the wmbusmeters log on the deployment host and keeps the
+      telegrams of the meters on a private list only.
+    fields:
+      decision: >
+        haus_core::wmbus parses one log line at a time: anything not a JSON
+        object, not of a meter on HAUS_WMBUS_METERS, or not an fhkvdataiii
+        allocator yields nothing, before any field but the id is read, and
+        nothing about it is logged. Kept: current_hca (units), temp_room_c
+        and temp_radiator_c, timestamped by the telegram's UTC timestamp. The
+        series names are built by haus ("Heizkostenverteiler <name>",
+        "Temperatur <name>", "Heizkörper <name>"), so the radiator temperature
+        counts as a radiator probe and the room temperature as room air; a
+        meter name with a probe word is refused. haus reads the whole file at
+        start and new complete lines every 10 s; a shorter or replaced file is
+        read from its start; a value stored twice is stored once.
+      rationale: >
+        A receiver hears the neighbours' allocators as well as the owner's;
+        the neighbours' heating data has no place in the
+        owner's history (owner decision). Reading the log the existing
+        logger already writes changes nothing on the running setup (owner
+        decision).
+      alternatives: >
+        Storing every meter (neighbours' data in the history); a separate
+        wmbusmeters output with only the owner's meters (a change to the
+        running logger); MQTT (no broker on the host).
+    links:
+      - type: satisfies
+        target: REQ-WMBUS-001

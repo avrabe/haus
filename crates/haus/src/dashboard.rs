@@ -70,7 +70,7 @@ pub fn is_stale(v: &SeriesView, live: Live, now_ms: i64) -> bool {
         return true;
     };
     match v.meta.key.source {
-        Source::Loriot => now_ms - ts > chart::hold_ms(Source::Loriot),
+        Source::Loriot | Source::Wmbus => now_ms - ts > chart::hold_ms(v.meta.key.source),
         // Loxone sends only changes: an old value is current while the
         // source is connected.
         Source::Loxone => live.loxone != Some(true) || now_ms - ts > chart::hold_ms(Source::Loxone),
@@ -613,7 +613,7 @@ pub(crate) fn series_data(s: &AppState, now: i64) -> Result<Vec<warn::SeriesData
             .collect();
         recent.extend(store.range(id, from, now).map_err(|e| e.to_string())?);
         let live = match meta.key.source {
-            Source::Loriot => true,
+            Source::Loriot | Source::Wmbus => true,
             Source::Loxone => {
                 followed.contains(&(meta.key.source_id.clone(), meta.key.field.clone()))
             }

@@ -17,7 +17,7 @@ pub const COLUMNS: usize = 240;
 pub fn hold_ms(source: Source) -> i64 {
     match source {
         // Uplinks every ~10 min: three missed ones are a gap.
-        Source::Loriot => 30 * 60 * 1000,
+        Source::Loriot | Source::Wmbus => 30 * 60 * 1000,
         // Events only on change: a day without one is a gap.
         Source::Loxone => 24 * 3600 * 1000,
     }

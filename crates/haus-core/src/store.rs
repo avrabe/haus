@@ -72,6 +72,8 @@ pub enum Source {
     Loriot,
     /// A Loxone Miniserver (live) or its Stats4Lox history (import).
     Loxone,
+    /// Wireless M-Bus meters, as wmbusmeters decodes them.
+    Wmbus,
 }
 
 impl Source {
@@ -79,6 +81,7 @@ impl Source {
         match self {
             Source::Loriot => "loriot",
             Source::Loxone => "loxone",
+            Source::Wmbus => "wmbus",
         }
     }
 }

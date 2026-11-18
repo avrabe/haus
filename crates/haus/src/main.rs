@@ -13,6 +13,7 @@ mod sse;
 mod state;
 mod weather;
 mod websocket;
+mod wmbus;
 
 use axum::{extract::State, routing::get, Json, Router};
 use haus_core::{load_device_names, AppConfig, StorageConfig, StorageManager};
@@ -56,6 +57,10 @@ Environment:
   HAUS_WEATHER_AT  optional \"<lat>,<lon>\": haus asks Open-Meteo every 30 min
                    for the weather there (rounded to 0.1 degree) for the house
                    view's idle scene; browsers never call Open-Meteo themselves
+  HAUS_WMBUS_LOG, HAUS_WMBUS_METERS   optional wireless M-Bus meters: the log
+                   wmbusmeters writes (JSON lines) and a private JSON file
+                   {\"<8-hex id>\": {\"name\": ..., \"room\": ...}} of the owner's
+                   meters; every other meter is ignored (both or neither)
   HAUS_LABELS      optional JSON file {\"<uuid or EUI>/<field>\": \"label\"}: the
                    sensor's label on the pages (default: its source name
                    without the room and the quantity)
@@ -195,6 +200,9 @@ async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
     if let Some(lox) = &state.sources.loxone {
         sources.insert("loxone".into(), source_health(lox));
     }
+    if let Some(w) = &state.sources.wmbus {
+        sources.insert("wmbus".into(), source_health(w));
+    }
     Json(serde_json::json!({
         "status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
@@ -292,9 +300,15 @@ async fn run() -> anyhow::Result<()> {
 
     // The Loxone source is on when LOXONE_URL is set.
     let loxone = loxone::LoxoneConfig::from_env().map_err(|e| anyhow::anyhow!(e))?;
+    let wmbus = wmbus::config(
+        std::env::var("HAUS_WMBUS_LOG").ok().as_deref(),
+        std::env::var("HAUS_WMBUS_METERS").ok().as_deref(),
+    )
+    .map_err(|e| anyhow::anyhow!(e))?;
     let sources = Sources {
         loriot: UpstreamHealth::default(),
         loxone: loxone.as_ref().map(|_| UpstreamHealth::default()),
+        wmbus: wmbus.as_ref().map(|_| UpstreamHealth::default()),
     };
 
     // Warning thresholds; a broken file is an error, not silently ignored.
@@ -370,6 +384,10 @@ async fn run() -> anyhow::Result<()> {
     tokio::spawn(async move {
         websocket::run_loriot_connection(ws_state).await;
     });
+
+    if let Some(cfg) = wmbus {
+        tokio::spawn(wmbus::run(state.clone(), cfg));
+    }
 
     if let Some(p) = weather::place() {
         tracing::info!(
@@ -609,6 +627,7 @@ mod tests {
         with_lox.sources = std::sync::Arc::new(Sources {
             loriot: UpstreamHealth::default(),
             loxone: Some(UpstreamHealth::default()),
+            wmbus: None,
         });
         let Json(body) = health(State(with_lox)).await;
         assert_eq!(body["sources"]["loxone"]["connected"], false);
