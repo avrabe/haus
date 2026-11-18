@@ -453,7 +453,7 @@ artifacts:
     type: requirement
     title: Wireless M-Bus meters as a source
     status: implemented
-    release: v0.6.0
+    release: v0.5.0
     description: >
       haus reads the owner's wireless M-Bus heating cost allocators from the
       JSON lines wmbusmeters writes (HAUS_WMBUS_LOG): allocator units, the
