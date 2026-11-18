@@ -37,6 +37,9 @@ pub struct Current {
     /// The source's own words for the weather (the Miniserver's type text).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
+    /// The outside dew point, °C: the airing hint compares rooms to it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dew_point_2m: Option<f64>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -86,7 +89,7 @@ pub fn place() -> Option<Place> {
 /// The request for a place: only the rounded coordinates leave the house.
 pub fn url(p: Place) -> String {
     format!(
-        "https://api.open-meteo.com/v1/forecast?latitude={:.1}&longitude={:.1}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m",
+        "https://api.open-meteo.com/v1/forecast?latitude={:.1}&longitude={:.1}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,dew_point_2m",
         p.lat, p.lon
     )
 }
@@ -118,6 +121,7 @@ pub fn store_loxone(e: &haus_core::loxone::WeatherEntry, text: Option<&str>, now
         wind_speed_10m: e.wind_speed,
         wind_direction_10m: Some(e.wind_direction as f64),
         text: text.map(str::to_string),
+        dew_point_2m: Some(e.dew_point).filter(|d| d.is_finite()),
     };
     *LOXONE.write().unwrap_or_else(|e| e.into_inner()) = Some(Answer {
         current: c,
@@ -265,6 +269,11 @@ pub fn current_for_tests() -> Option<Current> {
         .map(|a| a.current)
 }
 
+/// The outside dew point of the freshest answer under 3 h old.
+pub fn outside_dew_point(now_ms: i64) -> Option<f64> {
+    fresh(now_ms).and_then(|a| a.current.dew_point_2m)
+}
+
 /// GET /api/weather: the freshest answer, or 404 when there is none under
 /// 3 h old.
 pub async fn weather_api() -> Response {
@@ -339,7 +348,7 @@ mod tests {
     fn the_answer_is_read_and_old_weather_is_not_served() {
         let body = r#"{"latitude":12.3,"longitude":45.7,"current_units":{},
             "current":{"time":"2026-11-14T12:00","interval":900,"temperature_2m":6.4,
-            "weather_code":61,"wind_speed_10m":12.0,"wind_direction_10m":250}}"#;
+            "weather_code":61,"wind_speed_10m":12.0,"wind_direction_10m":250,"dew_point_2m":4.6}}"#;
         let c = parse_answer(body).unwrap();
         assert_eq!(
             c,
@@ -348,7 +357,8 @@ mod tests {
                 weather_code: 61,
                 wind_speed_10m: 12.0,
                 wind_direction_10m: Some(250.0),
-                text: None
+                text: None,
+                dew_point_2m: Some(4.6),
             }
         );
         assert!(parse_answer(r#"{"error":true,"reason":"x"}"#).is_err());

@@ -23,6 +23,7 @@ pub mod energy;
 pub mod heating;
 pub mod heatpump;
 pub mod house;
+pub mod humidity;
 pub mod import;
 pub mod ingest;
 pub mod label;

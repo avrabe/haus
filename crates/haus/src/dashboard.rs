@@ -339,11 +339,64 @@ pub(crate) fn short_text<'a>(
     }
 }
 
+/// The overview without dew points (tests).
+#[cfg(test)]
 pub fn render_overview(
     views: &[SeriesView],
     live: Live,
     now_ms: i64,
     warnings: &[Warning],
+) -> String {
+    render_overview_with(views, live, now_ms, warnings, &BTreeMap::new())
+}
+
+/// A room's dew point and, with an outside dew point, the airing hint
+/// (REQ-ANA-001).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RoomAir {
+    pub dew_point: f64,
+    pub airing: Option<haus_core::humidity::Airing>,
+}
+
+/// The dew point of every indoor room with a room temperature (not a floor
+/// probe) and a humidity, by the same climate rules as the warnings.
+pub(crate) fn room_air(
+    data: &[warn::SeriesData],
+    now: i64,
+    cfg: &warn::WarnConfig,
+    outside_dp: Option<f64>,
+) -> BTreeMap<String, RoomAir> {
+    use haus_core::humidity::{airing, dew_point};
+    let mut by: BTreeMap<&str, Vec<&warn::SeriesData>> = BTreeMap::new();
+    for d in data {
+        by.entry(room_of(&d.meta)).or_default().push(d);
+    }
+    by.into_iter()
+        .filter(|(room, _)| !cfg.rooms.get(*room).is_some_and(|r| r.outdoor))
+        .filter_map(|(room, ss)| {
+            let c = warn::climate(&ss, now, cfg);
+            let (t, rh) = (c.air_c?, c.rh?);
+            if c.floor {
+                return None;
+            }
+            let dp = dew_point(t, rh)?;
+            Some((
+                room.to_string(),
+                RoomAir {
+                    dew_point: dp,
+                    airing: outside_dp.map(|o| airing(t, dp, o)),
+                },
+            ))
+        })
+        .collect()
+}
+
+pub fn render_overview_with(
+    views: &[SeriesView],
+    live: Live,
+    now_ms: i64,
+    warnings: &[Warning],
+    air: &BTreeMap<String, RoomAir>,
 ) -> String {
     let mut rooms: BTreeMap<String, Vec<&SeriesView>> = BTreeMap::new();
     for v in views.iter().filter(|v| {
@@ -399,6 +452,15 @@ pub fn render_overview(
         );
         for w in mine {
             s += &warn_item(w, &short_text(w, meta_of, now_ms));
+        }
+        if let Some(a) = air.get(&room) {
+            s += &format!(
+                r#"<li class="air"><span class="label">Dew point</span><span class="val">{:.1} °C</span><span class="age">{}</span></li>"#,
+                a.dew_point,
+                a.airing
+                    .map(|x| x.text())
+                    .unwrap_or("no outside value to compare")
+            );
         }
         for v in vs {
             let stale = is_stale(v, live, now_ms);
@@ -667,6 +729,26 @@ pub async fn warnings(state: &AppState) -> Vec<Warning> {
     })
 }
 
+/// The warnings and the rooms' dew points from one pass over the store.
+async fn warnings_and_air(state: &AppState) -> (Vec<Warning>, BTreeMap<String, RoomAir>) {
+    let s = state.clone();
+    let now = now_ms();
+    let lv = live(state);
+    let outside = crate::weather::outside_dew_point(now);
+    let result = run_blocking(move || -> Result<_, String> {
+        let data = series_data(&s, now)?;
+        Ok((
+            evaluate(&data, lv, now, &s.warn),
+            room_air(&data, now, &s.warn, outside),
+        ))
+    })
+    .await;
+    result.unwrap_or_else(|e| {
+        tracing::error!("warnings: {e}");
+        (Vec::new(), BTreeMap::new())
+    })
+}
+
 /// GET /api/warnings
 pub async fn warnings_api(State(state): State<AppState>) -> axum::Json<Vec<Warning>> {
     axum::Json(warnings(&state).await)
@@ -676,8 +758,12 @@ pub async fn warnings_api(State(state): State<AppState>) -> axum::Json<Vec<Warni
 pub async fn overview_page(State(state): State<AppState>) -> Response {
     match views(&state).await {
         Ok(v) => {
-            let w = warnings(&state).await;
-            page("Rooms", &render_overview(&v, live(&state), now_ms(), &w)).into_response()
+            let (w, air) = warnings_and_air(&state).await;
+            page(
+                "Rooms",
+                &render_overview_with(&v, live(&state), now_ms(), &w, &air),
+            )
+            .into_response()
         }
         Err(e) => error(e),
     }
@@ -687,8 +773,8 @@ pub async fn overview_page(State(state): State<AppState>) -> Response {
 pub async fn overview_partial(State(state): State<AppState>) -> Response {
     match views(&state).await {
         Ok(v) => {
-            let w = warnings(&state).await;
-            Html(render_overview(&v, live(&state), now_ms(), &w)).into_response()
+            let (w, air) = warnings_and_air(&state).await;
+            Html(render_overview_with(&v, live(&state), now_ms(), &w, &air)).into_response()
         }
         Err(e) => error(e),
     }
@@ -1119,6 +1205,98 @@ mod tests {
         for (k, _, _) in chart::RANGES {
             assert!(html.contains(&format!("range={k}")));
         }
+    }
+
+    // rivet: verifies REQ-ANA-001
+    #[test]
+    fn rooms_show_their_dew_point_and_whether_airing_helps() {
+        use haus_core::humidity::Airing;
+        let data = |v: SeriesView| warn::SeriesData {
+            id: v.id,
+            meta: v.meta,
+            latest: v.latest,
+            recent: v.latest.into_iter().collect(),
+            followed: true,
+        };
+        let views = vec![
+            view(
+                1,
+                Source::Loriot,
+                Quantity::Temperature,
+                "Keller",
+                None,
+                Some(2 * MIN),
+                14.0,
+            ),
+            view(
+                2,
+                Source::Loriot,
+                Quantity::Humidity,
+                "Keller",
+                None,
+                Some(2 * MIN),
+                78.0,
+            ),
+            // An outdoor room is not a room to air.
+            view(
+                3,
+                Source::Loxone,
+                Quantity::Temperature,
+                "T",
+                Some("Terrasse"),
+                Some(2 * MIN),
+                20.0,
+            ),
+            view(
+                4,
+                Source::Loxone,
+                Quantity::Humidity,
+                "H",
+                Some("Terrasse"),
+                Some(2 * MIN),
+                90.0,
+            ),
+            // Temperature without humidity: no dew point.
+            view(
+                5,
+                Source::Loxone,
+                Quantity::Temperature,
+                "T",
+                Some("Flur"),
+                Some(2 * MIN),
+                20.0,
+            ),
+        ];
+        let d: Vec<warn::SeriesData> = views.iter().cloned().map(data).collect();
+        let mut cfg = warn::WarnConfig::default();
+        cfg.rooms.insert(
+            "Terrasse".into(),
+            warn::RoomSettings {
+                outdoor: true,
+                ..Default::default()
+            },
+        );
+        // A humid summer day: outside dew point 16 °C over a 14 °C cellar.
+        let air = room_air(&d, NOW, &cfg, Some(16.0));
+        assert_eq!(air.keys().collect::<Vec<_>>(), vec!["Keller"]);
+        let k = air["Keller"];
+        assert!((k.dew_point - 10.25).abs() < 0.1, "{}", k.dew_point);
+        assert_eq!(k.airing, Some(Airing::Condenses));
+        let live = Live {
+            loriot: true,
+            loxone: Some(true),
+        };
+        let html = render_overview_with(&views, live, NOW, &[], &air);
+        assert!(
+            html.contains("Dew point") && html.contains("10.2 °C"),
+            "{html}"
+        );
+        assert!(html.contains("keep closed: outside air would condense"));
+        // Without an outside value the dew point still shows.
+        let air = room_air(&d, NOW, &cfg, None);
+        assert_eq!(air["Keller"].airing, None);
+        assert!(render_overview_with(&views, live, NOW, &[], &air)
+            .contains("no outside value to compare"));
     }
 
     // rivet: verifies REQ-WARN-001
