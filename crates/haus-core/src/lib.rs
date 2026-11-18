@@ -16,6 +16,7 @@ pub fn current_timestamp_ms() -> u64 {
         .as_millis() as u64
 }
 
+pub mod activity;
 pub mod analytics;
 pub mod battery_trend;
 pub mod chart;

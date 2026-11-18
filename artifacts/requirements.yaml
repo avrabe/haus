@@ -804,3 +804,59 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-WMBUS-001
+
+  # --- Analytics kept from issue #5 (owner choice 2026-11-18) ---
+  - id: REQ-ANA-001
+    type: requirement
+    title: Dew point and airing hint per room
+    status: implemented
+    release: v0.5.0
+    description: >
+      Every indoor room with a room temperature (not a floor probe) and a
+      humidity shows its dew point on the dashboard. With an outside dew
+      point from the weather (the Miniserver's, else Open-Meteo's) it says
+      whether airing dries the room, changes little, makes it damper, or
+      would let outside air condense on its walls (outside dew point within
+      1 K of the room temperature). Rooms marked outdoor get none.
+    fields:
+      priority: should
+      category: interface
+    links:
+      - type: traces-to
+        target: REQ-WARN-001
+
+  - id: REQ-ANA-002
+    type: requirement
+    title: Battery trend and replacement month
+    status: implemented
+    release: v0.5.0
+    description: >
+      The Status page shows for each battery series its change per 30 days
+      and the month its trend reaches the battery-low threshold, from a
+      straight line through the daily medians of the last year, once there
+      are 14 days of span; otherwise it says that history is missing, "no
+      decline yet" for a decline under 5 mV per 30 days, or "more than 5
+      years". The battery-low warning is unchanged.
+    fields:
+      priority: could
+      category: interface
+    links:
+      - type: traces-to
+        target: REQ-WARN-001
+
+  - id: REQ-ANA-003
+    type: requirement
+    title: Motion pattern by weekday and hour
+    status: implemented
+    release: v0.5.0
+    description: >
+      The page of a motion counter shows a weekday by hour grid of the mean
+      movements per hour over the last 8 weeks, from the rises of the
+      counter between readings at most an hour apart; a drop counts as a
+      restarted counter.
+    fields:
+      priority: could
+      category: interface
+    links:
+      - type: traces-to
+        target: REQ-UI-001

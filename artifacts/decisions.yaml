@@ -808,3 +808,41 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-HEAT-001
+
+  - id: DD-027
+    type: design-decision
+    title: Issue 5 analytics as small page additions, computed per request
+    status: implemented
+    release: v0.5.0
+    description: >
+      Of issue 5's list, three items are built: the dew point with an airing
+      hint, a battery trend and a motion pattern. Each is computed from the
+      store when its page is shown; nothing new is stored.
+    fields:
+      decision: >
+        Dew point by the Magnus formula (Sonntag 1990 constants); the airing
+        hint compares dew points with a 1 K margin, about the error two
+        sensors' ±0.3 K and ±3 % RH give. The outside dew point comes with
+        the weather (Loxone entry, Open-Meteo dew_point_2m). Battery: a
+        least-squares line through daily medians, since the voltage follows
+        the temperature within a day. Motion: rises of the counter placed in
+        the hour of the later reading, gaps over an hour left out, divided
+        by the days observed for that weekday.
+      rationale: >
+        The owner kept these three and dropped the rest (2026-11-18). Mould
+        risk, comfort, battery low, silent and stuck sensors already exist as
+        warnings; correlation is on the Heizung page; air quality comes from
+        wohl; the MCP tools are out by the no-MCP decision. The basement is
+        open to outside air, so whether airing helps is the useful question.
+      alternatives: >
+        Heat index (not meaningful indoors); machine-learned anomaly
+        detection and forecasts (no labelled data, the warning rules cover
+        what matters); absolute humidity instead of dew point (the same
+        ordering, a less familiar unit).
+    links:
+      - type: satisfies
+        target: REQ-ANA-001
+      - type: satisfies
+        target: REQ-ANA-002
+      - type: satisfies
+        target: REQ-ANA-003

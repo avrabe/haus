@@ -852,9 +852,66 @@ pub struct RangeQuery {
 }
 
 /// A series and the points of its chart.
-type SensorData = (SeriesView, Vec<(i64, f64)>);
+type SensorData = (
+    SeriesView,
+    Vec<(i64, f64)>,
+    Option<haus_core::activity::Pattern>,
+);
 
 /// GET /sensor/{id}?range=1h|24h|7d|90d
+/// Weeks of history the motion pattern uses.
+const PATTERN_WEEKS: i64 = 8;
+
+/// A timestamp's local (date, weekday from Monday, hour).
+fn local_slot(t: i64) -> (i64, usize, usize) {
+    use chrono::{Datelike, Timelike};
+    let d = chrono::DateTime::from_timestamp_millis(t)
+        .unwrap_or_default()
+        .with_timezone(&chrono::Local);
+    (
+        d.date_naive().num_days_from_ce() as i64,
+        d.weekday().num_days_from_monday() as usize,
+        d.hour() as usize,
+    )
+}
+
+/// The weekday × hour grid of a motion sensor, shaded by mean movements.
+pub fn render_pattern(p: &haus_core::activity::Pattern) -> String {
+    let mut s = format!(
+        "<h2>When it sees movement</h2><p class=\"note\">Mean movements per hour, last {PATTERN_WEEKS} weeks ({} days with readings).</p>",
+        p.days
+    );
+    if p.days == 0 {
+        return s + r#"<p class="empty">No readings close enough together yet.</p>"#;
+    }
+    let max = p.mean.iter().flatten().cloned().fold(0.0, f64::max);
+    s += r#"<div class="pattern"><table><tr><th></th>"#;
+    for h in 0..24 {
+        s += &format!(
+            "<th>{}</th>",
+            if h % 3 == 0 {
+                h.to_string()
+            } else {
+                String::new()
+            }
+        );
+    }
+    s += "</tr>";
+    for (wd, name) in ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+        .iter()
+        .enumerate()
+    {
+        s += &format!("<tr><th>{name}</th>");
+        for h in 0..24 {
+            let v = p.mean[wd][h];
+            let a = if max > 0.0 { v / max } else { 0.0 };
+            s += &format!(r#"<td style="--a:{a:.2}" title="{name} {h:02}:00 {v:.1}"></td>"#);
+        }
+        s += "</tr>";
+    }
+    s + "</table></div>"
+}
+
 pub async fn sensor_page(
     State(state): State<AppState>,
     Path(id): Path<SeriesId>,
@@ -879,13 +936,23 @@ pub async fn sensor_page(
             .range(id, now - ms - hold, now)
             .map_err(|e| e.to_string())?;
         let latest = store.latest(id).map_err(|e| e.to_string())?;
-        Ok(Some((SeriesView { id, meta, latest }, points)))
+        // A motion counter also gets its weekly pattern (REQ-ANA-003).
+        let pattern = if meta.quantity == Quantity::Motion {
+            let p = store
+                .range(id, now - PATTERN_WEEKS * 7 * 86_400_000, now)
+                .map_err(|e| e.to_string())?;
+            Some(haus_core::activity::weekly(&p, local_slot))
+        } else {
+            None
+        };
+        Ok(Some((SeriesView { id, meta, latest }, points, pattern)))
     })
     .await;
     match loaded {
-        Ok(Some((v, points))) => page(
+        Ok(Some((v, points, pattern))) => page(
             &v.meta.name,
-            &render_sensor(&v, &points, key, ms, live(&state), now),
+            &(render_sensor(&v, &points, key, ms, live(&state), now)
+                + &pattern.map(|p| render_pattern(&p)).unwrap_or_default()),
         )
         .into_response(),
         Ok(None) => (
@@ -1333,6 +1400,25 @@ mod tests {
             render_status_with(&views, live, NOW, "x", &[], &HashMap::new())
                 .contains("needs 2 weeks of history")
         );
+    }
+
+    // rivet: verifies REQ-ANA-003
+    #[test]
+    fn a_motion_sensor_shows_its_week_as_a_grid() {
+        use haus_core::activity::Pattern;
+        let mut mean = [[0.0; 24]; 7];
+        mean[0][8] = 12.0; // Monday 08:00, the busiest hour
+        mean[5][20] = 3.0;
+        let html = render_pattern(&Pattern { mean, days: 40 });
+        assert!(html.contains("40 days with readings"), "{html}");
+        assert!(html.contains(r#"style="--a:1.00" title="Mo 08:00 12.0""#));
+        assert!(html.contains(r#"style="--a:0.25" title="Sa 20:00 3.0""#));
+        assert_eq!(html.matches("<td ").count(), 7 * 24);
+        assert!(render_pattern(&Pattern {
+            mean: [[0.0; 24]; 7],
+            days: 0
+        })
+        .contains("No readings close enough together yet."));
     }
 
     // rivet: verifies REQ-ANA-001

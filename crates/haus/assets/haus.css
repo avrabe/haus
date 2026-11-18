@@ -150,3 +150,10 @@ html.house-max, html.house-max body { overflow: hidden; }
 .heizung h2 { margin-top: 1.5rem; }
 .note { color: var(--dim); font-size: .85rem; margin-top: 1rem; }
 table.heat { display: block; overflow-x: auto; }
+
+/* Motion pattern: weekday × hour */
+.pattern { overflow-x: auto; }
+.pattern table { width: auto; border: 0; background: none; }
+.pattern th { font-size: .7rem; padding: 0 .2rem; text-align: center; }
+.pattern td { width: 1.1rem; height: 1.1rem; padding: 0; border: 1px solid var(--bg);
+  background: color-mix(in srgb, var(--accent) calc(var(--a) * 100%), var(--surface)); }
