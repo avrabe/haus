@@ -247,7 +247,7 @@ artifacts:
     type: design-decision
     title: wmbusmeters decodes the radio, haus consumes its JSON
     status: implemented
-    release: v0.6.0
+    release: v0.5.0
     fields:
       decision: >
         A wM-Bus USB receiver (an IMST iU891A/iU893A-class stick, C1+T1)
@@ -740,7 +740,7 @@ artifacts:
     type: design-decision
     title: Only the owner's meters, by a private list, from the logger's file
     status: implemented
-    release: v0.6.0
+    release: v0.5.0
     description: >
       haus follows the wmbusmeters log on the deployment host and keeps the
       telegrams of the meters on a private list only.
