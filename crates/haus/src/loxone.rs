@@ -1193,6 +1193,8 @@ pub(crate) mod tests {
         .clone()
     }
 
+    // rivet: verifies DD-023
+    // rivet: verifies DD-026
     // rivet: verifies REQ-LOX-001
     // rivet: verifies REQ-LOX-002
     // rivet: verifies DD-004

@@ -154,6 +154,7 @@ mod tests {
     // 2026-11-01T00:00:00Z
     const NOV1: i64 = 1_793_491_200_000;
 
+    // rivet: verifies DD-026
     // rivet: verifies REQ-HEAT-001
     #[test]
     fn units_per_day_count_rises_and_a_new_period_from_zero() {
@@ -176,6 +177,7 @@ mod tests {
         assert!(daily_units(&p[..1], utc_day).is_empty());
     }
 
+    // rivet: verifies DD-026
     // rivet: verifies REQ-HEAT-001
     #[test]
     fn daily_means_weigh_time_and_skip_thin_days() {

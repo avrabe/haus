@@ -92,6 +92,7 @@ mod tests {
             .collect()
     }
 
+    // rivet: verifies DD-027
     // rivet: verifies REQ-ANA-002
     #[test]
     fn a_steady_decline_gives_the_day_it_reaches_the_threshold() {

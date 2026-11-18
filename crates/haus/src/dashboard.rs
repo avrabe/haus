@@ -1123,6 +1123,7 @@ mod tests {
         ]
     }
 
+    // rivet: verifies DD-020
     // rivet: verifies REQ-UI-011
     #[test]
     fn a_sensor_to_check_reads_short_and_an_alarm_keeps_its_message() {
@@ -1725,6 +1726,7 @@ mod tests {
 
     // The page can be installed on a home screen, where it opens without
     // the browser's bars; the manifest names only files haus serves.
+    // rivet: verifies DD-022
     // rivet: verifies REQ-UI-013
     #[tokio::test]
     async fn the_page_is_installable_as_a_home_screen_app() {

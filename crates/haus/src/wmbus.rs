@@ -153,6 +153,7 @@ mod tests {
         d
     }
 
+    // rivet: verifies DD-025
     // rivet: verifies REQ-WMBUS-001
     #[test]
     fn the_log_is_followed_across_partial_lines_truncation_and_replacement() {

@@ -68,6 +68,7 @@ mod tests {
         )
     }
 
+    // rivet: verifies DD-027
     // rivet: verifies REQ-ANA-003
     #[test]
     fn movements_land_in_their_weekday_and_hour() {
