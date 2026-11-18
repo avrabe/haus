@@ -148,11 +148,22 @@ fn load(s: &AppState, now: i64) -> Result<Input, String> {
             .filter_map(|(d, v)| median(v).map(|m| (d, m)))
             .collect()
     };
-    let has_outside = all.iter().any(|(_, m)| {
+    let mut has_outside = all.iter().any(|(_, m)| {
         m.quantity == Quantity::Temperature
             && air(m)
             && outdoor(m.room.as_deref().unwrap_or(&m.name))
     });
+    // No outdoor sensor: the Miniserver's weather temperature stands in.
+    if !has_outside {
+        if let Some((id, _)) = all.iter().find(|(_, m)| {
+            m.key.source == Source::Loxone
+                && m.key.source_id == crate::weather::OUTSIDE_ID
+                && m.key.field == crate::weather::OUTSIDE_FIELD
+        }) {
+            has_outside = true;
+            outside_days = vec![daily_means(&points(*id)?, from, now, HOLD, local_day)];
+        }
+    }
     Ok(Input {
         today: local_day(now),
         meters,
@@ -270,7 +281,7 @@ pub fn render(i: &Input) -> String {
     // Usage against the outside temperature.
     h.push_str("<h2>Usage and the outside temperature</h2>");
     if !i.has_outside {
-        h.push_str(r#"<p class="empty">No outside temperature: mark the outdoor room with <code>"outdoor": true</code> in the warning settings.</p>"#);
+        h.push_str(r#"<p class="empty">No outside temperature yet: haus records the Miniserver's weather temperature, or an air sensor in a room marked <code>"outdoor": true</code> in the warning settings.</p>"#);
     } else {
         let pts: Vec<(f64, f64)> = pair(&i.outside, &past(&total))
             .into_iter()
