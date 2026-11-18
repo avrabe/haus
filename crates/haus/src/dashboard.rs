@@ -15,7 +15,7 @@ use axum::{
 use haus_core::chart;
 use haus_core::store::{Quantity, SeriesId, SeriesMeta, Source};
 use haus_core::warn::{self, Kind, Warning};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 const PAGE: &str = include_str!("../assets/page.html");
 const CSS: &str = include_str!("../assets/haus.css");
@@ -339,11 +339,64 @@ pub(crate) fn short_text<'a>(
     }
 }
 
+/// The overview without dew points (tests).
+#[cfg(test)]
 pub fn render_overview(
     views: &[SeriesView],
     live: Live,
     now_ms: i64,
     warnings: &[Warning],
+) -> String {
+    render_overview_with(views, live, now_ms, warnings, &BTreeMap::new())
+}
+
+/// A room's dew point and, with an outside dew point, the airing hint
+/// (REQ-ANA-001).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RoomAir {
+    pub dew_point: f64,
+    pub airing: Option<haus_core::humidity::Airing>,
+}
+
+/// The dew point of every indoor room with a room temperature (not a floor
+/// probe) and a humidity, by the same climate rules as the warnings.
+pub(crate) fn room_air(
+    data: &[warn::SeriesData],
+    now: i64,
+    cfg: &warn::WarnConfig,
+    outside_dp: Option<f64>,
+) -> BTreeMap<String, RoomAir> {
+    use haus_core::humidity::{airing, dew_point};
+    let mut by: BTreeMap<&str, Vec<&warn::SeriesData>> = BTreeMap::new();
+    for d in data {
+        by.entry(room_of(&d.meta)).or_default().push(d);
+    }
+    by.into_iter()
+        .filter(|(room, _)| !cfg.rooms.get(*room).is_some_and(|r| r.outdoor))
+        .filter_map(|(room, ss)| {
+            let c = warn::climate(&ss, now, cfg);
+            let (t, rh) = (c.air_c?, c.rh?);
+            if c.floor {
+                return None;
+            }
+            let dp = dew_point(t, rh)?;
+            Some((
+                room.to_string(),
+                RoomAir {
+                    dew_point: dp,
+                    airing: outside_dp.map(|o| airing(t, dp, o)),
+                },
+            ))
+        })
+        .collect()
+}
+
+pub fn render_overview_with(
+    views: &[SeriesView],
+    live: Live,
+    now_ms: i64,
+    warnings: &[Warning],
+    air: &BTreeMap<String, RoomAir>,
 ) -> String {
     let mut rooms: BTreeMap<String, Vec<&SeriesView>> = BTreeMap::new();
     for v in views.iter().filter(|v| {
@@ -399,6 +452,15 @@ pub fn render_overview(
         );
         for w in mine {
             s += &warn_item(w, &short_text(w, meta_of, now_ms));
+        }
+        if let Some(a) = air.get(&room) {
+            s += &format!(
+                r#"<li class="air"><span class="label">Dew point</span><span class="val">{:.1} °C</span><span class="age">{}</span></li>"#,
+                a.dew_point,
+                a.airing
+                    .map(|x| x.text())
+                    .unwrap_or("no outside value to compare")
+            );
         }
         for v in vs {
             let stale = is_stale(v, live, now_ms);
@@ -491,12 +553,65 @@ pub fn render_sensor(
 }
 
 /// Sources, batteries and the age of every series (REQ-UI-003).
+/// The status page without battery trends (tests).
+#[cfg(test)]
 pub fn render_status(
     views: &[SeriesView],
     live: Live,
     now_ms: i64,
     health: &str,
     warnings: &[Warning],
+) -> String {
+    render_status_with(views, live, now_ms, health, warnings, &HashMap::new())
+}
+
+/// A year of each battery series, as its trend (REQ-ANA-002); blocking.
+fn battery_forecasts(
+    s: &AppState,
+    now: i64,
+) -> Result<HashMap<u32, haus_core::battery_trend::Forecast>, String> {
+    const YEAR: i64 = 365 * 86_400_000;
+    let store = s.ingest.store();
+    let mut out = HashMap::new();
+    for (id, m) in store.series().map_err(|e| e.to_string())? {
+        if m.quantity != Quantity::BatteryVoltage {
+            continue;
+        }
+        let low = if m.unit == "%" {
+            s.warn.defaults.battery_pct
+        } else {
+            s.warn.defaults.battery_v
+        };
+        let p = store
+            .range(id, now - YEAR, now)
+            .map_err(|e| e.to_string())?;
+        if let Some(f) = haus_core::battery_trend::forecast(&p, low, now) {
+            out.insert(id, f);
+        }
+    }
+    Ok(out)
+}
+
+/// "Mar 2027", "now", "more than 5 years" or "no decline yet".
+fn replace_text(f: &haus_core::battery_trend::Forecast, now_ms: i64) -> String {
+    use haus_core::battery_trend::FLAT_PER_MONTH;
+    match f.low_at_ms {
+        Some(t) if t <= now_ms => "now".into(),
+        Some(t) => chrono::DateTime::from_timestamp_millis(t)
+            .map(|d| format!("~{}", d.with_timezone(&chrono::Local).format("%b %Y")))
+            .unwrap_or_default(),
+        None if f.per_month <= -FLAT_PER_MONTH => "more than 5 years".into(),
+        None => "no decline yet".into(),
+    }
+}
+
+pub fn render_status_with(
+    views: &[SeriesView],
+    live: Live,
+    now_ms: i64,
+    health: &str,
+    warnings: &[Warning],
+    trends: &HashMap<u32, haus_core::battery_trend::Forecast>,
 ) -> String {
     let mut s = String::from("<h1>Status</h1>");
     if warnings.is_empty() {
@@ -521,18 +636,31 @@ pub fn render_status(
         .filter(|v| v.meta.quantity == Quantity::BatteryVoltage)
         .collect();
     if !batteries.is_empty() {
-        s += "<h2>Batteries</h2><table><tr><th>Sensor</th><th>Voltage</th><th>Measured</th></tr>";
+        s += "<h2>Batteries</h2><table><tr><th>Sensor</th><th>Voltage</th><th>Measured</th><th>Trend / 30 d</th><th>Replace</th></tr>";
         for v in batteries {
             let (val, when) = v
                 .latest
                 .map(|(ts, x)| (value(x, &v.meta.unit), age(now_ms, ts)))
                 .unwrap_or_else(|| ("–".into(), "no data".into()));
+            let (trend, replace) = match trends.get(&v.id) {
+                Some(f) => (
+                    format!(
+                        "{:+.2}{}",
+                        f.per_month,
+                        if v.meta.unit == "%" { " %" } else { " V" }
+                    ),
+                    replace_text(f, now_ms),
+                ),
+                None => ("–".into(), "needs 2 weeks of history".into()),
+            };
             s += &format!(
-                r#"<tr><td><a href="sensor/{}">{}</a></td><td class="num">{}</td><td>{}</td></tr>"#,
+                r#"<tr><td><a href="sensor/{}">{}</a></td><td class="num">{}</td><td>{}</td><td class="num">{}</td><td>{}</td></tr>"#,
                 v.id,
                 esc(&v.meta.name),
                 esc(&val),
-                esc(&when)
+                esc(&when),
+                esc(&trend),
+                esc(&replace)
             );
         }
         s += "</table>";
@@ -667,6 +795,26 @@ pub async fn warnings(state: &AppState) -> Vec<Warning> {
     })
 }
 
+/// The warnings and the rooms' dew points from one pass over the store.
+async fn warnings_and_air(state: &AppState) -> (Vec<Warning>, BTreeMap<String, RoomAir>) {
+    let s = state.clone();
+    let now = now_ms();
+    let lv = live(state);
+    let outside = crate::weather::outside_dew_point(now);
+    let result = run_blocking(move || -> Result<_, String> {
+        let data = series_data(&s, now)?;
+        Ok((
+            evaluate(&data, lv, now, &s.warn),
+            room_air(&data, now, &s.warn, outside),
+        ))
+    })
+    .await;
+    result.unwrap_or_else(|e| {
+        tracing::error!("warnings: {e}");
+        (Vec::new(), BTreeMap::new())
+    })
+}
+
 /// GET /api/warnings
 pub async fn warnings_api(State(state): State<AppState>) -> axum::Json<Vec<Warning>> {
     axum::Json(warnings(&state).await)
@@ -676,8 +824,12 @@ pub async fn warnings_api(State(state): State<AppState>) -> axum::Json<Vec<Warni
 pub async fn overview_page(State(state): State<AppState>) -> Response {
     match views(&state).await {
         Ok(v) => {
-            let w = warnings(&state).await;
-            page("Rooms", &render_overview(&v, live(&state), now_ms(), &w)).into_response()
+            let (w, air) = warnings_and_air(&state).await;
+            page(
+                "Rooms",
+                &render_overview_with(&v, live(&state), now_ms(), &w, &air),
+            )
+            .into_response()
         }
         Err(e) => error(e),
     }
@@ -687,8 +839,8 @@ pub async fn overview_page(State(state): State<AppState>) -> Response {
 pub async fn overview_partial(State(state): State<AppState>) -> Response {
     match views(&state).await {
         Ok(v) => {
-            let w = warnings(&state).await;
-            Html(render_overview(&v, live(&state), now_ms(), &w)).into_response()
+            let (w, air) = warnings_and_air(&state).await;
+            Html(render_overview_with(&v, live(&state), now_ms(), &w, &air)).into_response()
         }
         Err(e) => error(e),
     }
@@ -700,9 +852,66 @@ pub struct RangeQuery {
 }
 
 /// A series and the points of its chart.
-type SensorData = (SeriesView, Vec<(i64, f64)>);
+type SensorData = (
+    SeriesView,
+    Vec<(i64, f64)>,
+    Option<haus_core::activity::Pattern>,
+);
 
 /// GET /sensor/{id}?range=1h|24h|7d|90d
+/// Weeks of history the motion pattern uses.
+const PATTERN_WEEKS: i64 = 8;
+
+/// A timestamp's local (date, weekday from Monday, hour).
+fn local_slot(t: i64) -> (i64, usize, usize) {
+    use chrono::{Datelike, Timelike};
+    let d = chrono::DateTime::from_timestamp_millis(t)
+        .unwrap_or_default()
+        .with_timezone(&chrono::Local);
+    (
+        d.date_naive().num_days_from_ce() as i64,
+        d.weekday().num_days_from_monday() as usize,
+        d.hour() as usize,
+    )
+}
+
+/// The weekday × hour grid of a motion sensor, shaded by mean movements.
+pub fn render_pattern(p: &haus_core::activity::Pattern) -> String {
+    let mut s = format!(
+        "<h2>When it sees movement</h2><p class=\"note\">Mean movements per hour, last {PATTERN_WEEKS} weeks ({} days with readings).</p>",
+        p.days
+    );
+    if p.days == 0 {
+        return s + r#"<p class="empty">No readings close enough together yet.</p>"#;
+    }
+    let max = p.mean.iter().flatten().cloned().fold(0.0, f64::max);
+    s += r#"<div class="pattern"><table><tr><th></th>"#;
+    for h in 0..24 {
+        s += &format!(
+            "<th>{}</th>",
+            if h % 3 == 0 {
+                h.to_string()
+            } else {
+                String::new()
+            }
+        );
+    }
+    s += "</tr>";
+    for (wd, name) in ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+        .iter()
+        .enumerate()
+    {
+        s += &format!("<tr><th>{name}</th>");
+        for h in 0..24 {
+            let v = p.mean[wd][h];
+            let a = if max > 0.0 { v / max } else { 0.0 };
+            s += &format!(r#"<td style="--a:{a:.2}" title="{name} {h:02}:00 {v:.1}"></td>"#);
+        }
+        s += "</tr>";
+    }
+    s + "</table></div>"
+}
+
 pub async fn sensor_page(
     State(state): State<AppState>,
     Path(id): Path<SeriesId>,
@@ -727,13 +936,23 @@ pub async fn sensor_page(
             .range(id, now - ms - hold, now)
             .map_err(|e| e.to_string())?;
         let latest = store.latest(id).map_err(|e| e.to_string())?;
-        Ok(Some((SeriesView { id, meta, latest }, points)))
+        // A motion counter also gets its weekly pattern (REQ-ANA-003).
+        let pattern = if meta.quantity == Quantity::Motion {
+            let p = store
+                .range(id, now - PATTERN_WEEKS * 7 * 86_400_000, now)
+                .map_err(|e| e.to_string())?;
+            Some(haus_core::activity::weekly(&p, local_slot))
+        } else {
+            None
+        };
+        Ok(Some((SeriesView { id, meta, latest }, points, pattern)))
     })
     .await;
     match loaded {
-        Ok(Some((v, points))) => page(
+        Ok(Some((v, points, pattern))) => page(
             &v.meta.name,
-            &render_sensor(&v, &points, key, ms, live(&state), now),
+            &(render_sensor(&v, &points, key, ms, live(&state), now)
+                + &pattern.map(|p| render_pattern(&p)).unwrap_or_default()),
         )
         .into_response(),
         Ok(None) => (
@@ -754,9 +973,24 @@ pub async fn status_page(State(state): State<AppState>) -> Response {
                 v.len(),
                 env!("CARGO_PKG_VERSION")
             );
+            let now = now_ms();
+            let st = state.clone();
+            let batteries = run_blocking(move || battery_forecasts(&st, now))
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!("battery trends: {e}");
+                    HashMap::new()
+                });
             page(
                 "Status",
-                &render_status(&v, live(&state), now_ms(), &health, &warnings(&state).await),
+                &render_status_with(
+                    &v,
+                    live(&state),
+                    now,
+                    &health,
+                    &warnings(&state).await,
+                    &batteries,
+                ),
             )
             .into_response()
         }
@@ -1119,6 +1353,164 @@ mod tests {
         for (k, _, _) in chart::RANGES {
             assert!(html.contains(&format!("range={k}")));
         }
+    }
+
+    // rivet: verifies REQ-ANA-002
+    #[test]
+    fn the_status_page_shows_each_batterys_trend_and_replacement() {
+        use haus_core::battery_trend::Forecast;
+        let views = sample();
+        let live = Live {
+            loriot: true,
+            loxone: Some(true),
+        };
+        let at = |f| render_status_with(&views, live, NOW, "x", &[], &[(2, f)].into());
+        let html = at(Forecast {
+            days: 40,
+            per_month: -0.12,
+            low_at_ms: Some(NOW + 100 * 86_400_000),
+        });
+        assert!(
+            html.contains("Trend / 30 d") && html.contains("-0.12 V"),
+            "{html}"
+        );
+        let month = chrono::DateTime::from_timestamp_millis(NOW + 100 * 86_400_000)
+            .unwrap()
+            .with_timezone(&chrono::Local)
+            .format("~%b %Y")
+            .to_string();
+        assert!(html.contains(&month), "{month}");
+        let flat = Forecast {
+            days: 40,
+            per_month: 0.0,
+            low_at_ms: None,
+        };
+        assert!(at(flat).contains("no decline yet"));
+        let slow = Forecast {
+            per_month: -0.01,
+            ..flat
+        };
+        assert!(at(slow).contains("more than 5 years"));
+        let due = Forecast {
+            low_at_ms: Some(NOW),
+            ..slow
+        };
+        assert!(at(due).contains(">now<"));
+        assert!(
+            render_status_with(&views, live, NOW, "x", &[], &HashMap::new())
+                .contains("needs 2 weeks of history")
+        );
+    }
+
+    // rivet: verifies REQ-ANA-003
+    #[test]
+    fn a_motion_sensor_shows_its_week_as_a_grid() {
+        use haus_core::activity::Pattern;
+        let mut mean = [[0.0; 24]; 7];
+        mean[0][8] = 12.0; // Monday 08:00, the busiest hour
+        mean[5][20] = 3.0;
+        let html = render_pattern(&Pattern { mean, days: 40 });
+        assert!(html.contains("40 days with readings"), "{html}");
+        assert!(html.contains(r#"style="--a:1.00" title="Mo 08:00 12.0""#));
+        assert!(html.contains(r#"style="--a:0.25" title="Sa 20:00 3.0""#));
+        assert_eq!(html.matches("<td ").count(), 7 * 24);
+        assert!(render_pattern(&Pattern {
+            mean: [[0.0; 24]; 7],
+            days: 0
+        })
+        .contains("No readings close enough together yet."));
+    }
+
+    // rivet: verifies REQ-ANA-001
+    #[test]
+    fn rooms_show_their_dew_point_and_whether_airing_helps() {
+        use haus_core::humidity::Airing;
+        let data = |v: SeriesView| warn::SeriesData {
+            id: v.id,
+            meta: v.meta,
+            latest: v.latest,
+            recent: v.latest.into_iter().collect(),
+            followed: true,
+        };
+        let views = vec![
+            view(
+                1,
+                Source::Loriot,
+                Quantity::Temperature,
+                "Keller",
+                None,
+                Some(2 * MIN),
+                14.0,
+            ),
+            view(
+                2,
+                Source::Loriot,
+                Quantity::Humidity,
+                "Keller",
+                None,
+                Some(2 * MIN),
+                78.0,
+            ),
+            // An outdoor room is not a room to air.
+            view(
+                3,
+                Source::Loxone,
+                Quantity::Temperature,
+                "T",
+                Some("Terrasse"),
+                Some(2 * MIN),
+                20.0,
+            ),
+            view(
+                4,
+                Source::Loxone,
+                Quantity::Humidity,
+                "H",
+                Some("Terrasse"),
+                Some(2 * MIN),
+                90.0,
+            ),
+            // Temperature without humidity: no dew point.
+            view(
+                5,
+                Source::Loxone,
+                Quantity::Temperature,
+                "T",
+                Some("Flur"),
+                Some(2 * MIN),
+                20.0,
+            ),
+        ];
+        let d: Vec<warn::SeriesData> = views.iter().cloned().map(data).collect();
+        let mut cfg = warn::WarnConfig::default();
+        cfg.rooms.insert(
+            "Terrasse".into(),
+            warn::RoomSettings {
+                outdoor: true,
+                ..Default::default()
+            },
+        );
+        // A humid summer day: outside dew point 16 °C over a 14 °C cellar.
+        let air = room_air(&d, NOW, &cfg, Some(16.0));
+        assert_eq!(air.keys().collect::<Vec<_>>(), vec!["Keller"]);
+        let k = air["Keller"];
+        assert!((k.dew_point - 10.25).abs() < 0.1, "{}", k.dew_point);
+        assert_eq!(k.airing, Some(Airing::Condenses));
+        let live = Live {
+            loriot: true,
+            loxone: Some(true),
+        };
+        let html = render_overview_with(&views, live, NOW, &[], &air);
+        assert!(
+            html.contains("Dew point") && html.contains("10.2 °C"),
+            "{html}"
+        );
+        assert!(html.contains("keep closed: outside air would condense"));
+        // Without an outside value the dew point still shows.
+        let air = room_air(&d, NOW, &cfg, None);
+        assert_eq!(air["Keller"].airing, None);
+        assert!(render_overview_with(&views, live, NOW, &[], &air)
+            .contains("no outside value to compare"));
     }
 
     // rivet: verifies REQ-WARN-001

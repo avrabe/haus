@@ -31,7 +31,7 @@ h2 { font-size: 1.05rem; margin-bottom: .5rem; }
 .rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .75rem; }
 .room { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .8rem 1rem; }
 .room ul { list-style: none; }
-.room li a { display: grid; grid-template-columns: 1fr auto; column-gap: .5rem; padding: .25rem 0; }
+.room li a, .room li.air { display: grid; grid-template-columns: 1fr auto; column-gap: .5rem; padding: .25rem 0; }
 .room li a:hover .val { color: var(--accent); }
 .label { color: var(--dim); }
 .val { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
@@ -150,3 +150,10 @@ html.house-max, html.house-max body { overflow: hidden; }
 .heizung h2 { margin-top: 1.5rem; }
 .note { color: var(--dim); font-size: .85rem; margin-top: 1rem; }
 table.heat { display: block; overflow-x: auto; }
+
+/* Motion pattern: weekday × hour */
+.pattern { overflow-x: auto; }
+.pattern table { width: auto; border: 0; background: none; }
+.pattern th { font-size: .7rem; padding: 0 .2rem; text-align: center; }
+.pattern td { width: 1.1rem; height: 1.1rem; padding: 0; border: 1px solid var(--bg);
+  background: color-mix(in srgb, var(--accent) calc(var(--a) * 100%), var(--surface)); }

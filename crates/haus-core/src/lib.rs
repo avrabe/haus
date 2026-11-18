@@ -16,13 +16,16 @@ pub fn current_timestamp_ms() -> u64 {
         .as_millis() as u64
 }
 
+pub mod activity;
 pub mod analytics;
+pub mod battery_trend;
 pub mod chart;
 pub mod compare;
 pub mod energy;
 pub mod heating;
 pub mod heatpump;
 pub mod house;
+pub mod humidity;
 pub mod import;
 pub mod ingest;
 pub mod label;

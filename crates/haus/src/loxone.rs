@@ -1223,6 +1223,7 @@ pub(crate) mod tests {
         let w = crate::weather::current_for_tests().unwrap();
         assert_eq!((w.temperature_2m, w.wind_speed_10m), (6.4, 18.5));
         assert_eq!(w.text.as_deref(), Some("leichter Regen"));
+        assert_eq!(w.dew_point_2m, Some(4.6));
         assert_eq!((w.weather_code, w.wind_direction_10m), (61, Some(250.0)));
         // Its temperature is stored as the outside temperature series
         // (REQ-HEAT-001), a value no warning rule takes for room air.
