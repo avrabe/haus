@@ -556,6 +556,7 @@ mod tests {
         }
     }
 
+    // rivet: verifies DD-024
     // rivet: verifies REQ-UI-006
     // rivet: verifies DD-017
     #[test]

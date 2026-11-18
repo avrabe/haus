@@ -84,6 +84,7 @@ mod tests {
         }
     }
 
+    // rivet: verifies DD-027
     // rivet: verifies REQ-ANA-001
     #[test]
     fn airing_dries_a_humid_bathroom_but_not_a_cool_cellar_in_summer() {

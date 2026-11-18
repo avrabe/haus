@@ -452,7 +452,7 @@ artifacts:
   - id: REQ-WMBUS-001
     type: requirement
     title: Wireless M-Bus meters as a source
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       haus reads the owner's wireless M-Bus heating cost allocators from the
@@ -498,7 +498,7 @@ artifacts:
   - id: REQ-UI-006
     type: requirement
     title: A 3D view of the house with sensors in their rooms
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       A page shows the building level by level (levels can be shown alone or
@@ -523,7 +523,7 @@ artifacts:
   - id: REQ-UI-007
     type: requirement
     title: Readable sensor labels
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       Labels come from what the sources say a sensor is (the Loxone structure
@@ -667,7 +667,7 @@ artifacts:
   - id: REQ-UI-010
     type: requirement
     title: House view tour, warnings first, full screen
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       The 3D house view can tour the rooms on its own: every 5, 10, 20 or
@@ -696,7 +696,7 @@ artifacts:
   - id: REQ-UI-011
     type: requirement
     title: A sensor to check is a short note, not an alarm
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       Warnings are of two sorts. An alarm is about the room (too cold, too
@@ -717,7 +717,7 @@ artifacts:
   - id: REQ-UI-012
     type: requirement
     title: Idle scene with season, sky and weather over the house view
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       After two minutes without input, the house view shows warte's idle
@@ -742,7 +742,7 @@ artifacts:
   - id: REQ-UI-013
     type: requirement
     title: Installable on a home screen, full screen on a wall tablet
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       haus can be added to a phone's or tablet's home screen, where it opens
@@ -761,7 +761,7 @@ artifacts:
   - id: REQ-UI-014
     type: requirement
     title: Weather and sky in the 3D view
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       The 3D house view shows the weather around the house: the sun lights
@@ -782,7 +782,7 @@ artifacts:
   - id: REQ-HEAT-001
     type: requirement
     title: Heizung page - allocator usage and its relation to temperature
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       When the wM-Bus source is configured, a Heizung page lists each heating
@@ -809,7 +809,7 @@ artifacts:
   - id: REQ-ANA-001
     type: requirement
     title: Dew point and airing hint per room
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       Every indoor room with a room temperature (not a floor probe) and a
@@ -828,7 +828,7 @@ artifacts:
   - id: REQ-ANA-002
     type: requirement
     title: Battery trend and replacement month
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       The Status page shows for each battery series its change per 30 days
@@ -847,7 +847,7 @@ artifacts:
   - id: REQ-ANA-003
     type: requirement
     title: Motion pattern by weekday and hour
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       The page of a motion counter shows a weekday by hour grid of the mean

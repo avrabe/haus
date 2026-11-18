@@ -805,6 +805,7 @@ mod tests {
     // The weather-state table as the protocol document lays it out, built
     // byte by byte here (not with the encoder): uuid, lastUpdate u32,
     // nrEntries i32, then 68-byte entries of 5 i32 and 6 f64, little endian.
+    // rivet: verifies DD-023
     // rivet: verifies REQ-UI-012
     #[test]
     fn weather_tables_are_read_as_the_protocol_document_lays_them_out() {

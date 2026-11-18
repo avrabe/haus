@@ -183,6 +183,8 @@ mod tests {
         )
     }
 
+    // rivet: verifies DD-010
+    // rivet: verifies DD-025
     // rivet: verifies REQ-WMBUS-001
     #[test]
     fn only_the_owners_allocators_become_series() {
@@ -223,6 +225,7 @@ mod tests {
         .is_empty());
     }
 
+    // rivet: verifies DD-025
     // rivet: verifies REQ-WMBUS-001
     #[test]
     fn a_bad_meter_list_is_refused_naming_the_id() {

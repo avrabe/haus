@@ -575,6 +575,7 @@ mod tests {
         }
     }
 
+    // rivet: verifies DD-026
     // rivet: verifies REQ-HEAT-001
     #[test]
     fn the_page_shows_usage_and_how_it_follows_the_weather() {

@@ -246,7 +246,7 @@ artifacts:
   - id: DD-010
     type: design-decision
     title: wmbusmeters decodes the radio, haus consumes its JSON
-    status: implemented
+    status: verified
     release: v0.5.0
     fields:
       decision: >
@@ -457,7 +457,7 @@ artifacts:
   - id: DD-017
     type: design-decision
     title: 3D house view from a private model file, drawn with vendored three.js
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       haus reads the operator's house model (HAUS_HOUSE_MODEL) once at
@@ -499,7 +499,7 @@ artifacts:
   - id: DD-018
     type: design-decision
     title: Labels from the source name without room and quantity, overridable per series
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       The room overview, the sensor page and the house view label a series
@@ -535,7 +535,7 @@ artifacts:
   - id: DD-019
     type: design-decision
     title: The tour runs in the page, warnings interleaved, nothing on the server
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       The tour, the alert strip and full screen are client-side additions to
@@ -576,7 +576,7 @@ artifacts:
   - id: DD-020
     type: design-decision
     title: Checks and alarms told apart by kind, short text computed where labels are known
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       warn::Kind::is_check marks the kinds about a sensor or source; the
@@ -608,7 +608,7 @@ artifacts:
   - id: DD-021
     type: design-decision
     title: warte's idle scene reused, weather fetched by the server
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       crates/haus/assets/idle.js is warte's templates/idle.js at eb27b67
@@ -644,7 +644,7 @@ artifacts:
   - id: DD-022
     type: design-decision
     title: A web app manifest instead of more full-screen code
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       Full screen on iPad browsers comes from installing the page, not from
@@ -670,7 +670,7 @@ artifacts:
   - id: DD-023
     type: design-decision
     title: Weather from the Loxone Weather Service, drawn in the scene in the browser
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       haus reads the weather service's binary weather tables on its existing
@@ -709,7 +709,7 @@ artifacts:
   - id: DD-024
     type: design-decision
     title: A floor probe stands in for a room without an air sensor
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       warn::climate falls back to the room's floor-heating probes when it
@@ -739,7 +739,7 @@ artifacts:
   - id: DD-025
     type: design-decision
     title: Only the owner's meters, by a private list, from the logger's file
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       haus follows the wmbusmeters log on the deployment host and keeps the
@@ -774,7 +774,7 @@ artifacts:
   - id: DD-026
     type: design-decision
     title: Heizung page computed from the store, on request
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       The Heizung page derives daily units and daily mean temperatures from
@@ -812,7 +812,7 @@ artifacts:
   - id: DD-027
     type: design-decision
     title: Issue 5 analytics as small page additions, computed per request
-    status: implemented
+    status: verified
     release: v0.5.0
     description: >
       Of issue 5's list, three items are built: the dew point with an airing

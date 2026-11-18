@@ -343,6 +343,8 @@ mod tests {
         assert_eq!(wmo_from("", 0.0, 4.0), 2);
     }
 
+    // rivet: verifies DD-021
+    // rivet: verifies DD-023
     // rivet: verifies REQ-UI-012
     #[test]
     fn the_answer_is_read_and_old_weather_is_not_served() {
