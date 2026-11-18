@@ -246,6 +246,14 @@ fn page_with_nav(title: &str, body: &str, nav: &str) -> Html<String> {
                     ""
                 },
             )
+            .replace(
+                "{{HEIZUNG}}",
+                if crate::heating_page::enabled() {
+                    r#"<a href="heizung">Heizung</a>"#
+                } else {
+                    ""
+                },
+            )
             .replace("{{NAV}}", nav)
             .replace("{{TITLE}}", &esc(title))
             .replace("{{VERSION}}", env!("CARGO_PKG_VERSION"))
