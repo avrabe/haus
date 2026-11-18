@@ -790,7 +790,8 @@ artifacts:
       current billing period with its share, and draws the units per day of
       the last 30 days stacked by allocator with the outside temperature. It
       relates the daily units to the daily mean outside temperature (median
-      of the air temperatures in rooms marked outdoor) and, per room, to the
+      of the air temperatures in rooms marked outdoor, else the Miniserver's
+      weather temperature, which haus stores as a series) and, per room, to the
       daily mean room temperature of haus's own air sensors, each as a
       least-squares slope with Pearson's r from at least 7 full days; with
       fewer days or no such sensor it says so instead of drawing a fit. It

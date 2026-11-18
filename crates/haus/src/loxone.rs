@@ -687,11 +687,27 @@ async fn session(state: &AppState, cfg: &LoxoneConfig) -> Result<(), BoxError> {
                                     if let Some(e) = t.entries.first() {
                                         let text =
                                             w.type_texts.get(&e.weather_type).map(String::as_str);
-                                        crate::weather::store_loxone(
-                                            e,
-                                            text,
-                                            crate::dashboard::now_ms(),
-                                        );
+                                        let now = crate::dashboard::now_ms();
+                                        crate::weather::store_loxone(e, text, now);
+                                        if let Some(item) =
+                                            crate::weather::outside_item(e.temperature, now)
+                                        {
+                                            let ingest = state.ingest.clone();
+                                            match timeout(
+                                                cfg.silence,
+                                                run_blocking(move || ingest.ingest(&[item])),
+                                            )
+                                            .await
+                                            {
+                                                Ok(Ok(_)) => {}
+                                                Ok(Err(e)) => tracing::warn!(
+                                                    "Loxone: storing the outside temperature: {e}"
+                                                ),
+                                                Err(_) => tracing::warn!(
+                                                    "Loxone: storing the outside temperature timed out"
+                                                ),
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1208,8 +1224,31 @@ pub(crate) mod tests {
         assert_eq!((w.temperature_2m, w.wind_speed_10m), (6.4, 18.5));
         assert_eq!(w.text.as_deref(), Some("leichter Regen"));
         assert_eq!((w.weather_code, w.wind_direction_10m), (61, Some(250.0)));
-        // The unknown state created no series.
-        assert_eq!(st.ingest.store().series().unwrap().len(), 2);
+        // Its temperature is stored as the outside temperature series
+        // (REQ-HEAT-001), a value no warning rule takes for room air.
+        wait_for("the outside temperature", || {
+            let key = SeriesKey::new(
+                Source::Loxone,
+                crate::weather::OUTSIDE_ID,
+                crate::weather::OUTSIDE_FIELD,
+            );
+            // Not there yet is not a failure: the series appears with its point.
+            st.ingest.store().series_id(&key).unwrap().is_some()
+                && points(
+                    &st,
+                    crate::weather::OUTSIDE_ID,
+                    crate::weather::OUTSIDE_FIELD,
+                ) == vec![6.4]
+        })
+        .await;
+        let metas = st.ingest.store().series().unwrap();
+        let out = metas
+            .iter()
+            .find(|(_, m)| m.key.source_id == crate::weather::OUTSIDE_ID)
+            .unwrap();
+        assert!(!haus_core::warn::is_air(&st.warn, &out.1));
+        // The unknown state created no series: the two events and the weather.
+        assert_eq!(metas.len(), 3);
         // Keepalives flow.
         wait_for("a keepalive", || {
             fake.received().iter().any(|c| c == "keepalive")

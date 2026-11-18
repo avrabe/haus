@@ -126,6 +126,30 @@ pub fn store_loxone(e: &haus_core::loxone::WeatherEntry, text: Option<&str>, now
     });
 }
 
+/// The Miniserver's outside temperature as a stored series, so the Heizung
+/// page can relate daily usage to it (REQ-HEAT-001, DD-026). Quantity
+/// Other, not Temperature: no warning rule and no room climate takes the
+/// weather for room air, and a store written by this version still opens in
+/// an older one.
+pub fn outside_item(temperature: f64, now_ms: i64) -> Option<haus_core::ingest::Item> {
+    use haus_core::store::{Quantity, SeriesKey, SeriesMeta, Source};
+    temperature.is_finite().then(|| haus_core::ingest::Item {
+        meta: SeriesMeta {
+            key: SeriesKey::new(Source::Loxone, OUTSIDE_ID, OUTSIDE_FIELD),
+            quantity: Quantity::Other,
+            unit: "°C".into(),
+            name: "Außentemperatur (Wetter)".into(),
+            room: Some("Wetter".into()),
+        },
+        ts_ms: now_ms,
+        value: temperature,
+    })
+}
+
+/// The key of the outside temperature series.
+pub const OUTSIDE_ID: &str = "weather";
+pub const OUTSIDE_FIELD: &str = "temperature";
+
 /// A WMO weather code for a weather text (German or English, as the
 /// Miniserver names its types), so the page draws rain, snow, fog or a
 /// storm the same way for either source. Without a known word the
