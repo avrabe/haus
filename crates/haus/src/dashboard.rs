@@ -15,7 +15,7 @@ use axum::{
 use haus_core::chart;
 use haus_core::store::{Quantity, SeriesId, SeriesMeta, Source};
 use haus_core::warn::{self, Kind, Warning};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 const PAGE: &str = include_str!("../assets/page.html");
 const CSS: &str = include_str!("../assets/haus.css");
@@ -553,12 +553,65 @@ pub fn render_sensor(
 }
 
 /// Sources, batteries and the age of every series (REQ-UI-003).
+/// The status page without battery trends (tests).
+#[cfg(test)]
 pub fn render_status(
     views: &[SeriesView],
     live: Live,
     now_ms: i64,
     health: &str,
     warnings: &[Warning],
+) -> String {
+    render_status_with(views, live, now_ms, health, warnings, &HashMap::new())
+}
+
+/// A year of each battery series, as its trend (REQ-ANA-002); blocking.
+fn battery_forecasts(
+    s: &AppState,
+    now: i64,
+) -> Result<HashMap<u32, haus_core::battery_trend::Forecast>, String> {
+    const YEAR: i64 = 365 * 86_400_000;
+    let store = s.ingest.store();
+    let mut out = HashMap::new();
+    for (id, m) in store.series().map_err(|e| e.to_string())? {
+        if m.quantity != Quantity::BatteryVoltage {
+            continue;
+        }
+        let low = if m.unit == "%" {
+            s.warn.defaults.battery_pct
+        } else {
+            s.warn.defaults.battery_v
+        };
+        let p = store
+            .range(id, now - YEAR, now)
+            .map_err(|e| e.to_string())?;
+        if let Some(f) = haus_core::battery_trend::forecast(&p, low, now) {
+            out.insert(id, f);
+        }
+    }
+    Ok(out)
+}
+
+/// "Mar 2027", "now", "more than 5 years" or "no decline yet".
+fn replace_text(f: &haus_core::battery_trend::Forecast, now_ms: i64) -> String {
+    use haus_core::battery_trend::FLAT_PER_MONTH;
+    match f.low_at_ms {
+        Some(t) if t <= now_ms => "now".into(),
+        Some(t) => chrono::DateTime::from_timestamp_millis(t)
+            .map(|d| format!("~{}", d.with_timezone(&chrono::Local).format("%b %Y")))
+            .unwrap_or_default(),
+        None if f.per_month <= -FLAT_PER_MONTH => "more than 5 years".into(),
+        None => "no decline yet".into(),
+    }
+}
+
+pub fn render_status_with(
+    views: &[SeriesView],
+    live: Live,
+    now_ms: i64,
+    health: &str,
+    warnings: &[Warning],
+    trends: &HashMap<u32, haus_core::battery_trend::Forecast>,
 ) -> String {
     let mut s = String::from("<h1>Status</h1>");
     if warnings.is_empty() {
@@ -583,18 +636,31 @@ pub fn render_status(
         .filter(|v| v.meta.quantity == Quantity::BatteryVoltage)
         .collect();
     if !batteries.is_empty() {
-        s += "<h2>Batteries</h2><table><tr><th>Sensor</th><th>Voltage</th><th>Measured</th></tr>";
+        s += "<h2>Batteries</h2><table><tr><th>Sensor</th><th>Voltage</th><th>Measured</th><th>Trend / 30 d</th><th>Replace</th></tr>";
         for v in batteries {
             let (val, when) = v
                 .latest
                 .map(|(ts, x)| (value(x, &v.meta.unit), age(now_ms, ts)))
                 .unwrap_or_else(|| ("–".into(), "no data".into()));
+            let (trend, replace) = match trends.get(&v.id) {
+                Some(f) => (
+                    format!(
+                        "{:+.2}{}",
+                        f.per_month,
+                        if v.meta.unit == "%" { " %" } else { " V" }
+                    ),
+                    replace_text(f, now_ms),
+                ),
+                None => ("–".into(), "needs 2 weeks of history".into()),
+            };
             s += &format!(
-                r#"<tr><td><a href="sensor/{}">{}</a></td><td class="num">{}</td><td>{}</td></tr>"#,
+                r#"<tr><td><a href="sensor/{}">{}</a></td><td class="num">{}</td><td>{}</td><td class="num">{}</td><td>{}</td></tr>"#,
                 v.id,
                 esc(&v.meta.name),
                 esc(&val),
-                esc(&when)
+                esc(&when),
+                esc(&trend),
+                esc(&replace)
             );
         }
         s += "</table>";
@@ -840,9 +906,24 @@ pub async fn status_page(State(state): State<AppState>) -> Response {
                 v.len(),
                 env!("CARGO_PKG_VERSION")
             );
+            let now = now_ms();
+            let st = state.clone();
+            let batteries = run_blocking(move || battery_forecasts(&st, now))
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!("battery trends: {e}");
+                    HashMap::new()
+                });
             page(
                 "Status",
-                &render_status(&v, live(&state), now_ms(), &health, &warnings(&state).await),
+                &render_status_with(
+                    &v,
+                    live(&state),
+                    now,
+                    &health,
+                    &warnings(&state).await,
+                    &batteries,
+                ),
             )
             .into_response()
         }
@@ -1205,6 +1286,53 @@ mod tests {
         for (k, _, _) in chart::RANGES {
             assert!(html.contains(&format!("range={k}")));
         }
+    }
+
+    // rivet: verifies REQ-ANA-002
+    #[test]
+    fn the_status_page_shows_each_batterys_trend_and_replacement() {
+        use haus_core::battery_trend::Forecast;
+        let views = sample();
+        let live = Live {
+            loriot: true,
+            loxone: Some(true),
+        };
+        let at = |f| render_status_with(&views, live, NOW, "x", &[], &[(2, f)].into());
+        let html = at(Forecast {
+            days: 40,
+            per_month: -0.12,
+            low_at_ms: Some(NOW + 100 * 86_400_000),
+        });
+        assert!(
+            html.contains("Trend / 30 d") && html.contains("-0.12 V"),
+            "{html}"
+        );
+        let month = chrono::DateTime::from_timestamp_millis(NOW + 100 * 86_400_000)
+            .unwrap()
+            .with_timezone(&chrono::Local)
+            .format("~%b %Y")
+            .to_string();
+        assert!(html.contains(&month), "{month}");
+        let flat = Forecast {
+            days: 40,
+            per_month: 0.0,
+            low_at_ms: None,
+        };
+        assert!(at(flat).contains("no decline yet"));
+        let slow = Forecast {
+            per_month: -0.01,
+            ..flat
+        };
+        assert!(at(slow).contains("more than 5 years"));
+        let due = Forecast {
+            low_at_ms: Some(NOW),
+            ..slow
+        };
+        assert!(at(due).contains(">now<"));
+        assert!(
+            render_status_with(&views, live, NOW, "x", &[], &HashMap::new())
+                .contains("needs 2 weeks of history")
+        );
     }
 
     // rivet: verifies REQ-ANA-001

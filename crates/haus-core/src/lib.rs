@@ -17,6 +17,7 @@ pub fn current_timestamp_ms() -> u64 {
 }
 
 pub mod analytics;
+pub mod battery_trend;
 pub mod chart;
 pub mod compare;
 pub mod energy;
