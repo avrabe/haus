@@ -6,6 +6,7 @@
 mod api;
 mod compare_cmd;
 mod dashboard;
+mod heating_page;
 mod house_view;
 mod import_cmd;
 mod loxone;
@@ -360,6 +361,7 @@ async fn run() -> anyhow::Result<()> {
         .route("/status", get(dashboard::status_page))
         .route("/api/warnings", get(dashboard::warnings_api))
         .route("/house", get(house_view::house_page))
+        .route("/heizung", get(heating_page::heizung_page))
         .route("/api/house", get(house_view::house_api))
         .route("/api/weather", get(weather::weather_api))
         .route("/static/{name}", get(dashboard::static_file))
@@ -386,6 +388,7 @@ async fn run() -> anyhow::Result<()> {
     });
 
     if let Some(cfg) = wmbus {
+        heating_page::enable();
         tokio::spawn(wmbus::run(state.clone(), cfg));
     }
 

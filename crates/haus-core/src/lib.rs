@@ -20,6 +20,7 @@ pub mod analytics;
 pub mod chart;
 pub mod compare;
 pub mod energy;
+pub mod heating;
 pub mod heatpump;
 pub mod house;
 pub mod import;

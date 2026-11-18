@@ -778,3 +778,28 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-UI-012
+
+  - id: REQ-HEAT-001
+    type: requirement
+    title: Heizung page - allocator usage and its relation to temperature
+    status: implemented
+    release: v0.5.0
+    description: >
+      When the wM-Bus source is configured, a Heizung page lists each heating
+      cost allocator's units today, over the last 7 and 30 days and in the
+      current billing period with its share, and draws the units per day of
+      the last 30 days stacked by allocator with the outside temperature. It
+      relates the daily units to the daily mean outside temperature (median
+      of the air temperatures in rooms marked outdoor) and, per room, to the
+      daily mean room temperature of haus's own air sensors, each as a
+      least-squares slope with Pearson's r from at least 7 full days; with
+      fewer days or no such sensor it says so instead of drawing a fit. It
+      shows each allocator's own room-temperature estimate next to haus's
+      sensor in the same room and the radiator temperature. Units are the
+      allocators' counts; no cost is estimated.
+    fields:
+      priority: should
+      category: interface
+    links:
+      - type: traces-to
+        target: REQ-WMBUS-001

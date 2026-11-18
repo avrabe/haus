@@ -770,3 +770,34 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-WMBUS-001
+
+  - id: DD-026
+    type: design-decision
+    title: Heizung page computed from the store, on request
+    status: implemented
+    release: v0.5.0
+    description: >
+      The Heizung page derives daily units and daily mean temperatures from
+      the stored series when it is requested; nothing new is stored.
+    fields:
+      decision: >
+        A day's units are the sum of the rises between consecutive readings,
+        counted on the local day of the later reading; a drop is a new
+        billing period counted from zero. Daily mean temperatures sample the
+        value standing at each full hour (held at most 6 h) and need 12
+        hours, so a sensor reporting on change is weighted by time. The
+        outside temperature is the median of the air temperatures in rooms
+        the warning settings mark outdoor, so it needs no new setting. Fits
+        (slope and r) use the last 90 days without today and need 7 days.
+      rationale: >
+        The owner chose units over a cost estimate and three relations:
+        outside temperature, room temperature, and the allocator's estimate
+        against haus's own sensor (2026-11-18). At four allocators and 90
+        days the computation is small enough to do per request.
+      alternatives: >
+        Storing the Miniserver's weather temperature as a series (a new
+        series that the warning rules would treat as a room unless marked
+        outdoor); a cost estimate from the bill's unit price (declined).
+    links:
+      - type: satisfies
+        target: REQ-HEAT-001
