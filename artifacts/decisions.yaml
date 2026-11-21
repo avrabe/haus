@@ -454,6 +454,8 @@ artifacts:
       - type: satisfies
         target: REQ-UI-009
 
+      - type: satisfies
+        target: REQ-UI-015
   - id: DD-017
     type: design-decision
     title: 3D house view from a private model file, drawn with vendored three.js
