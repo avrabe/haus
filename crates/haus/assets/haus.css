@@ -60,10 +60,36 @@ tr.stale td { color: var(--stale); }
 .warn.check { color: var(--dim); }
 .warnings { list-style: none; margin-bottom: 1rem; }
 /* nav v1: home link and app switcher (HAUS_NAV) */
-nav.apps { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-left: auto; font-size: 13px; }
-nav.apps a { color: var(--dim, inherit); text-decoration: none; }
-nav.apps a:hover { text-decoration: underline; }
-nav.apps a[aria-current="page"] { color: inherit; font-weight: 600; }
+/* App switcher (nav v2 menu, after lichtbild's): four dots open a panel. */
+details.appswitch { position: relative; margin-left: auto; }
+details.appswitch > summary {
+  list-style: none; cursor: pointer; width: 40px; height: 40px; border-radius: 10px;
+  display: grid; place-items: center; border: 1px solid transparent;
+}
+details.appswitch > summary::-webkit-details-marker { display: none; }
+details.appswitch > summary:hover, details.appswitch[open] > summary { border-color: var(--border); background: var(--surface); }
+details.appswitch .dots { display: grid; grid-template-columns: 7px 7px; gap: 4px; }
+details.appswitch .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
+details.appswitch .dots i:first-child, details.appswitch[open] .dots i { background: var(--accent); }
+details.appswitch > nav.apps {
+  position: absolute; right: 0; top: 48px; z-index: 30; display: flex; flex-direction: column; gap: 2px;
+  padding: 8px; width: min(300px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, .15);
+  max-height: calc(100vh - 120px); max-height: calc(100dvh - 120px); overflow-y: auto; overscroll-behavior: contain;
+}
+details.appswitch nav.apps a {
+  display: grid; grid-template-columns: 34px 1fr; column-gap: 12px; align-items: center;
+  padding: 8px 10px; border-radius: 10px; color: var(--text); text-decoration: none; margin: 0;
+}
+details.appswitch nav.apps a:hover { background: var(--bg); }
+details.appswitch nav.apps a.home { border-bottom: 1px solid var(--border); border-radius: 10px 10px 0 0; margin-bottom: 4px; }
+details.appswitch .mark {
+  grid-row: span 2; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+  font-size: 17px; line-height: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+}
+details.appswitch a[aria-current="page"] .mark { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+details.appswitch nav.apps b { font-weight: 600; font-size: 15px; }
+details.appswitch nav.apps a > span:not(.mark) { font-size: 12px; color: var(--dim); }
 /* The 3D house page (REQ-UI-006). */
 .house3d { position: relative; height: calc(100vh - 10rem); min-height: 420px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .house3d #view { position: absolute; inset: 0; z-index: 0; isolation: isolate; }

@@ -19,6 +19,8 @@ use std::collections::{BTreeMap, HashMap};
 
 const PAGE: &str = include_str!("../assets/page.html");
 const CSS: &str = include_str!("../assets/haus.css");
+/// Closes the app switcher on a tap outside it or Escape (REQ-UI-015).
+const JS: &str = include_str!("../assets/haus.js");
 const HTMX: &str = include_str!("../assets/htmx-2.0.4.min.js");
 
 /// One series with its newest point.
@@ -190,7 +192,7 @@ fn nav_html(file: Option<&str>, me: Option<&str>) -> Result<String, String> {
                 let json = std::fs::read_to_string(f).map_err(|e| format!("HAUS_NAV {f}: {e}"))?;
                 let nav =
                     haus_core::nav::parse(&json, me).map_err(|e| format!("HAUS_NAV {f}: {e}"))?;
-                haus_core::nav::render(&nav, me, esc)
+                haus_core::nav::render_menu(&nav, me, esc)
             }
         },
     )
@@ -1008,6 +1010,7 @@ const ICON_512: &[u8] = include_bytes!("../assets/icon-512.png");
 pub async fn static_file(Path(name): Path<String>) -> Response {
     let (body, ctype): (&[u8], &str) = match name.as_str() {
         "haus.css" => (CSS.as_bytes(), "text/css; charset=utf-8"),
+        "haus.js" => (JS.as_bytes(), "text/javascript; charset=utf-8"),
         "htmx-2.0.4.min.js" => (HTMX.as_bytes(), "text/javascript; charset=utf-8"),
         "manifest.webmanifest" => (MANIFEST.as_bytes(), "application/manifest+json"),
         "icon-180.png" => (ICON_180, "image/png"),
@@ -1576,10 +1579,16 @@ mod tests {
     // rivet: verifies REQ-UI-004
     // rivet: verifies DD-008
     #[test]
-    fn the_only_script_is_the_vendored_htmx() {
+    fn the_only_scripts_are_htmx_and_hauss_own() {
         let page = page("t", "b").0;
-        assert_eq!(page.matches("<script").count(), 1, "{page}");
+        // htmx, vendored, and haus.js, haus's own few lines for the switcher.
+        assert_eq!(page.matches("<script").count(), 2, "{page}");
         assert!(page.contains(r#"<script src="static/htmx-2.0.4.min.js" defer>"#));
+        assert!(page.contains(r#"<script src="static/haus.js" defer>"#));
+        assert!(
+            JS.len() < 1024 && !JS.contains("http"),
+            "haus.js stays small and local"
+        );
         assert!(!page.contains("wasm"));
         // The vendored file is the published htmx 2.0.4 (sha256 checked
         // against unpkg when vendored).
@@ -1637,6 +1646,7 @@ mod tests {
 
     // rivet: verifies REQ-UI-009
     // rivet: verifies DD-016
+    // rivet: verifies REQ-UI-015
     #[test]
     fn the_app_switcher_renders_exactly_the_file_and_nothing_when_unset() {
         let dir = std::env::temp_dir().join(format!("haus-nav-{}", std::process::id()));
@@ -1658,7 +1668,7 @@ mod tests {
         // Set: 1 + apps links, as given (site-absolute, not against the base).
         let nav = nav_html(Some(fs), Some("haus")).unwrap();
         let html = page_with_nav("t", "b", &nav).0;
-        let start = html.find(r#"<nav class="apps">"#).unwrap();
+        let start = html.find(r#"<details class="appswitch">"#).unwrap();
         let block = &html[start..start + html[start..].find("</nav>").unwrap()];
         let hrefs: Vec<&str> = block
             .split("href=\"")
@@ -1667,7 +1677,7 @@ mod tests {
             .collect();
         assert_eq!(hrefs, vec!["/", "/warte/", "/haus/"], "{block}");
         assert!(
-            block.contains(r#"href="/haus/" aria-current="page" title="Climate">haus</a>"#),
+            block.contains(r#"<a href="/haus/" aria-current="page"><span class="mark" aria-hidden="true">H</span><b>haus</b><span>Climate</span></a>"#),
             "{block}"
         );
         // Outside the switcher no link leaves the base path.
@@ -1685,9 +1695,19 @@ mod tests {
         assert!(nav_html(Some(fs), Some("photos"))
             .unwrap_err()
             .contains("self"));
+        // Version 2 with a mark (REQ-UI-015): the mark replaces the letter.
         std::fs::write(
             &f,
-            r#"{"version": 2, "home": {"name": "h", "url": "/"}, "apps": []}"#,
+            r#"{"version": 2, "home": {"name": "host", "url": "/"},
+                "apps": [{"id": "haus", "name": "haus", "url": "/haus/", "mark": "家"}]}"#,
+        )
+        .unwrap();
+        assert!(nav_html(Some(fs), Some("haus"))
+            .unwrap()
+            .contains(r#"<span class="mark" aria-hidden="true">家</span><b>haus</b>"#));
+        std::fs::write(
+            &f,
+            r#"{"version": 3, "home": {"name": "h", "url": "/"}, "apps": []}"#,
         )
         .unwrap();
         assert!(nav_html(Some(fs), Some("haus"))

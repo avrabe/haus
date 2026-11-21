@@ -860,3 +860,27 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-UI-001
+
+  - id: REQ-UI-015
+    type: requirement
+    title: Nav v2 - app marks and the switcher as a menu
+    status: implemented
+    release: v0.5.1
+    description: >
+      haus accepts nav files of version 1 and 2 (warte's contract,
+      2026-11-21). Version 2 adds an optional mark per app: 1 to 8 code
+      points without whitespace, control characters or " ' < > & \; a mark
+      in a version 1 file is refused as unknown, and errors name the field.
+      The switcher renders, for both versions, as a four-dot button opening
+      a right-anchored panel of at most 300 px that scrolls when tall: home
+      first, then every app with its mark (else the first letter of its
+      name, upper-cased), name and visible description, the current app's
+      mark filled with the accent colour. A tap outside or Escape closes it.
+      Still exactly 1 + apps links, everything escaped, nothing without the
+      setting.
+    fields:
+      priority: should
+      category: interface
+    links:
+      - type: traces-to
+        target: REQ-UI-009
