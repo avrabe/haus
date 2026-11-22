@@ -864,7 +864,7 @@ artifacts:
   - id: REQ-UI-015
     type: requirement
     title: Nav v2 - app marks and the switcher as a menu
-    status: implemented
+    status: verified
     release: v0.5.1
     description: >
       haus accepts nav files of version 1 and 2 (warte's contract,
