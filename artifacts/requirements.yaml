@@ -664,6 +664,24 @@ artifacts:
       - type: traces-to
         target: REQ-WARN-001
 
+  - id: REQ-WARN-007
+    type: requirement
+    title: Warnings carry a stable id and a severity for alerting
+    status: implemented
+    release: v0.5.2
+    description: >
+      GET /api/warnings serves each warning with an id that stays the same
+      while the condition holds (from its kind, room and sorted series ids)
+      and a severity, alarm (push) or check (show only), so that an alerting
+      consumer opens one alert per condition and clears it when the warning
+      disappears (seam avrabe/haus#82). Every kind is alarm.
+    fields:
+      priority: must
+      category: functional
+    links:
+      - type: traces-to
+        target: REQ-WARN-001
+
   - id: REQ-UI-010
     type: requirement
     title: House view tour, warnings first, full screen

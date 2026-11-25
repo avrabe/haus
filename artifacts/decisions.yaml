@@ -848,3 +848,32 @@ artifacts:
         target: REQ-ANA-002
       - type: satisfies
         target: REQ-ANA-003
+
+  - id: DD-028
+    type: design-decision
+    title: haus owns each warning's id and severity
+    status: implemented
+    release: v0.5.2
+    description: >
+      warte turns haus's warnings into its own alerts. haus adds the id and
+      the severity to /api/warnings; warte keeps no table of haus's kinds.
+    fields:
+      decision: >
+        The id is the first 8 bytes of SHA-256 over the kind name, the room
+        and the sorted series ids, as 16 hex digits; the message and since_ms
+        are not part of it. Severity comes from Kind::severity(), one match
+        arm per kind, so a new kind does not compile without a decision. The
+        owner chose alarm for every kind (2026-11-25); warte holds a silent
+        sensor 6 h before it pushes. Kind::is_check stays the page's split
+        between sensor and room warnings.
+      rationale: >
+        haus owns what its warnings mean, and the interface is versioned in
+        one place. Deriving severity from is_check would have left
+        sensor_silent unpushed, the case of the 2026-11-22..24 silence that
+        nobody saw.
+      alternatives: >
+        warte derives id and severity from its own kind table (option B of
+        avrabe/haus#82): stale whenever haus adds a kind.
+    links:
+      - type: satisfies
+        target: REQ-WARN-007

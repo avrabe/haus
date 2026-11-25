@@ -137,6 +137,74 @@ pub struct Warning {
     pub since_ms: Option<i64>,
 }
 
+/// Whether an alerting consumer pushes a warning or only shows it
+/// (REQ-WARN-007, DD-028).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Severity {
+    Alarm,
+    Check,
+}
+
+impl Kind {
+    /// The owner chose to push every kind (2026-11-25). One arm per kind,
+    /// so a new kind cannot compile without a decision.
+    pub fn severity(self) -> Severity {
+        match self {
+            Kind::MouldRisk
+            | Kind::TooCold
+            | Kind::TooWarm
+            | Kind::Frost
+            | Kind::SensorSilent
+            | Kind::SensorStuck
+            | Kind::SourceDown
+            | Kind::BatteryLow
+            | Kind::HeatingAnomaly => Severity::Alarm,
+        }
+    }
+}
+
+/// A warning as `/api/warnings` serves it: the warning's fields plus a
+/// stable `id` and its `severity` (REQ-WARN-007, seam avrabe/haus#82).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Alert {
+    #[serde(flatten)]
+    pub warning: Warning,
+    pub id: String,
+    pub severity: Severity,
+}
+
+impl Warning {
+    /// Stable while the condition holds: a hash of the kind, the room and
+    /// the sorted series ids. The message and `since_ms` are not part of it.
+    pub fn id(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let kind = serde_json::to_value(self.kind).expect("a unit variant serializes");
+        let mut series = self.series.clone();
+        series.sort_unstable();
+        let mut h = Sha256::new();
+        h.update(kind.as_str().unwrap_or_default().as_bytes());
+        h.update([0]);
+        h.update(self.room.as_bytes());
+        h.update([0]);
+        for s in series {
+            h.update(s.to_be_bytes());
+        }
+        h.finalize()[..8]
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
+    }
+
+    pub fn alert(self) -> Alert {
+        Alert {
+            id: self.id(),
+            severity: self.kind.severity(),
+            warning: self,
+        }
+    }
+}
+
 /// One series and its recent points (oldest first; the window may start with
 /// the point standing before it).
 #[derive(Clone, Debug)]
@@ -531,6 +599,67 @@ mod tests {
 
     const NOW: i64 = 1_800_000_000_000;
     const H: i64 = 3_600_000;
+
+    // rivet: verifies REQ-WARN-007
+    // rivet: verifies DD-028
+    #[test]
+    fn alert_id_is_stable_while_the_condition_holds() {
+        let w = Warning {
+            kind: Kind::SensorSilent,
+            room: "Cellar".into(),
+            series: vec![7, 3],
+            message: "x sent nothing for 61 min".into(),
+            since_ms: Some(NOW - 61 * 60_000),
+        };
+        // A later evaluation: other message, other order of series.
+        let later = Warning {
+            series: vec![3, 7],
+            message: "x sent nothing for 3000 min".into(),
+            ..w.clone()
+        };
+        assert_eq!(w.id(), later.id());
+        assert_eq!(w.id().len(), 16);
+        // Another room, kind or series set is another condition.
+        for other in [
+            Warning {
+                room: "Office".into(),
+                ..w.clone()
+            },
+            Warning {
+                kind: Kind::SensorStuck,
+                ..w.clone()
+            },
+            Warning {
+                series: vec![3],
+                ..w.clone()
+            },
+        ] {
+            assert_ne!(w.id(), other.id());
+        }
+        let v = serde_json::to_value(w.clone().alert()).unwrap();
+        assert_eq!(v["id"], w.id());
+        assert_eq!(v["severity"], "alarm");
+        assert_eq!(v["kind"], "sensor_silent");
+        assert_eq!(v["series"], serde_json::json!([7, 3]));
+    }
+
+    // rivet: verifies REQ-WARN-007
+    #[test]
+    fn every_kind_pushes() {
+        for k in [
+            Kind::MouldRisk,
+            Kind::TooCold,
+            Kind::TooWarm,
+            Kind::Frost,
+            Kind::SensorSilent,
+            Kind::SensorStuck,
+            Kind::SourceDown,
+            Kind::BatteryLow,
+            Kind::HeatingAnomaly,
+        ] {
+            assert_eq!(k.severity(), Severity::Alarm, "{k:?}");
+        }
+    }
 
     fn s(
         id: u32,
