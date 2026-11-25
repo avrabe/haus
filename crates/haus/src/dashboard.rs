@@ -14,7 +14,7 @@ use axum::{
 };
 use haus_core::chart;
 use haus_core::store::{Quantity, SeriesId, SeriesMeta, Source};
-use haus_core::warn::{self, Kind, Warning};
+use haus_core::warn::{self, Alert, Kind, Warning};
 use std::collections::{BTreeMap, HashMap};
 
 const PAGE: &str = include_str!("../assets/page.html");
@@ -817,9 +817,16 @@ async fn warnings_and_air(state: &AppState) -> (Vec<Warning>, BTreeMap<String, R
     })
 }
 
-/// GET /api/warnings
-pub async fn warnings_api(State(state): State<AppState>) -> axum::Json<Vec<Warning>> {
-    axum::Json(warnings(&state).await)
+/// GET /api/warnings: each warning with a stable id and its severity
+/// (REQ-WARN-007, seam avrabe/haus#82).
+pub async fn warnings_api(State(state): State<AppState>) -> axum::Json<Vec<Alert>> {
+    axum::Json(
+        warnings(&state)
+            .await
+            .into_iter()
+            .map(Warning::alert)
+            .collect(),
+    )
 }
 
 /// GET /
@@ -1856,6 +1863,10 @@ mod tests {
         assert_eq!(s, StatusCode::OK);
         // 19.5 °C in Kitchen: no climate warning; the source is not connected.
         assert!(b.starts_with('[') && b.contains("\"source_down\""), "{b}");
+        assert!(
+            b.contains(r#""severity":"alarm""#) && b.contains(r#""id":""#),
+            "{b}"
+        );
         assert_eq!(get(&app, "/static/haus.css").await.0, StatusCode::OK);
         assert_eq!(
             get(&app, "/static/htmx-2.0.4.min.js").await.0,
