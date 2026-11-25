@@ -667,7 +667,7 @@ artifacts:
   - id: REQ-WARN-007
     type: requirement
     title: Warnings carry a stable id and a severity for alerting
-    status: implemented
+    status: verified
     release: v0.5.2
     description: >
       GET /api/warnings serves each warning with an id that stays the same

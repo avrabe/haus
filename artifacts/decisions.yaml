@@ -852,7 +852,7 @@ artifacts:
   - id: DD-028
     type: design-decision
     title: haus owns each warning's id and severity
-    status: implemented
+    status: verified
     release: v0.5.2
     description: >
       warte turns haus's warnings into its own alerts. haus adds the id and
